@@ -11,7 +11,7 @@ strip = true
 panic = "abort"
 
 [dependencies]
-eframe = { version = "0.33.3", default-features=false, features = ["wayland", "glow", "x11", "persistence"] }
+eframe = { version = "0.33.3",features = ["persistence"] }
 chrono = { version = "0.4.44", features = ["clock"] }
 serde = { version = "1.0.228", features = ["derive"] }
 directories = "6.0.0"

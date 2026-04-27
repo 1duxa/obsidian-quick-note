@@ -43,7 +43,6 @@ impl DailyNote {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let (config, config_path) = Self::load_config();
         egui_extras::install_image_loaders(&cc.egui_ctx);
-        cc.egui_ctx.set_pixels_per_point(1.0);
 
         let mut fonts = egui::FontDefinitions::default();
         fonts.font_data.insert(
@@ -296,6 +295,7 @@ fn main() {
         .with_titlebar_buttons_shown(false)
         .with_minimize_button(false)
         .with_resizable(false);
+
     options.centered = true;
     options.viewport = viewport;
     eframe::run_native(
