@@ -2,7 +2,8 @@
 
 A minimal desktop app for quickly appending notes to your Obsidian daily page — without opening Obsidian.
 
-![Daily Note screenshot](screenshot.png)
+![Daily Note screenshot](<img width="419" height="180" alt="image" src="https://github.com/user-attachments/assets/dea47e3f-d2cf-4500-be5c-6ab3fe190c01" />
+)
 
 ## What it does
 
@@ -14,6 +15,12 @@ Press a shortcut, type a thought, hit Enter. Your note gets appended to your Obs
 - Obsidian running in the background
 
 ## Installation
+
+### From git 
+
+```bash
+cargo install --git https://github.com/1duxa/obsidian-quick-note
+```
 
 ### From source
 
