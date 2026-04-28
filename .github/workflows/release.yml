@@ -59,16 +59,18 @@ jobs:
           path: ${{ matrix.binary }}
 
   release:
-    name: Create Release
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
+      name: Create Release
+      needs: build
+      runs-on: ubuntu-latest
+      permissions:
+        contents: write
+      steps:
+        - uses: actions/download-artifact@v4
 
-      - name: Create release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dn-linux/dn
-            dn-windows/dn.exe
-            dn-macos/dn
+        - name: Create release
+          uses: softprops/action-gh-release@v2
+          with:
+            files: |
+              dn-linux/dn
+              dn-windows/dn.exe
+              dn-macos/dn
