@@ -57,8 +57,8 @@ The colored bar at the bottom indicates the current mode:
 
 Config is saved automatically to:
 
-- Linux: `~/.config/DailyNote/config.ron`
-- macOS: `~/Library/Application Support/DailyNote/config.ron`
+- Linux: `~/.config/dailynote/config.ron` and to `~/.local/share/daily-note`
+- macOS: `~/Library/Application Support/dailynote/config.ron`
 
 The only persisted setting is the last-used mode (timestamp on/off).
 
