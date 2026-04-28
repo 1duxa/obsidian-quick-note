@@ -2,7 +2,7 @@
 
 A minimal desktop app for quickly appending notes to your Obsidian daily page.
 
-![Daily Note screenshot](https://github.com/user-attachments/assets/24aa195c-0781-4995-bcf1-a30442fd9462)
+![Daily Note screenshot](https://github.com/user-attachments/assets/20ad3a0c-86b2-4648-8df5-6992b17856d4)
 
 ## What it does
 
