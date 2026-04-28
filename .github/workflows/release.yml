@@ -15,13 +15,13 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact: dn-linux
-            binary: target/release/dn
+            binary: target/release/dn-linux
           - os: windows-latest
             artifact: dn-windows
             binary: target/release/dn.exe
           - os: macos-latest
             artifact: dn-macos
-            binary: target/release/dn
+            binary: target/release/dn-macos
 
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +52,14 @@ jobs:
       - name: Build
         run: cargo build --release
 
+      - name: Rename binary (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: cp target/release/dn target/release/dn-linux
+
+      - name: Rename binary (macOS)
+        if: matrix.os == 'macos-latest'
+        run: cp target/release/dn target/release/dn-macos
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -59,18 +67,18 @@ jobs:
           path: ${{ matrix.binary }}
 
   release:
-      name: Create Release
-      needs: build
-      runs-on: ubuntu-latest
-      permissions:
-        contents: write
-      steps:
-        - uses: actions/download-artifact@v4
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
 
-        - name: Create release
-          uses: softprops/action-gh-release@v2
-          with:
-            files: |
-              dn-linux/dn
-              dn-windows/dn.exe
-              dn-macos/dn
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dn-linux/dn-linux
+            dn-windows/dn.exe
+            dn-macos/dn-macos
