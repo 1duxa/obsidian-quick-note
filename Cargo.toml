@@ -11,10 +11,10 @@ strip = true
 panic = "abort"
 
 [dependencies]
-eframe = { version = "0.33.3",features = ["persistence"] }
+eframe = { version = "0.34.1",features = ["persistence"] }
 chrono = { version = "0.4.44", features = ["clock"] }
 serde = { version = "1.0.228", features = ["derive"] }
 directories = "6.0.0"
 ron = "0.12.1"
 image = { version = "0.25.10", default-features = false, features = ["png"] }
-egui_extras = { version = "0.33.3",default-features = false,  features = ["image"] }
+egui_extras = { version = "0.34.1",default-features = false,  features = ["image"] }

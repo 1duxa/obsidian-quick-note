@@ -5,8 +5,8 @@ use directories::ProjectDirs;
 use eframe::{
     App,
     egui::{
-        self, Color32, CornerRadius, FontId, Frame, KeyboardShortcut, Margin, Modifiers, RichText,
-        Shadow, Stroke, TextEdit, Vec2, ViewportBuilder,
+        self, Color32, CornerRadius, FontId, Frame, Id, KeyboardShortcut, Margin, Modifiers,
+        RichText, Shadow, Stroke, TextEdit, Vec2, ViewportBuilder,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -137,11 +137,11 @@ impl DailyNote {
     }
 }
 
-const MAX_VISIBLE_LINES: usize = 2;
+const MAX_VISIBLE_LINES: usize = 4;
 
 impl App for DailyNote {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
-        let mut style = (*ctx.style()).clone();
+        let mut style = (*ctx.global_style()).clone();
         style.visuals.window_fill = Color32::from_rgb(18, 18, 24);
         style.visuals.panel_fill = Color32::from_rgb(18, 18, 24);
 
@@ -161,10 +161,39 @@ impl App for DailyNote {
         style.spacing.button_padding = Vec2::new(8.0, 4.0);
         style.spacing.window_margin = Margin::same(12);
 
-        ctx.set_style(style);
+        ctx.set_global_style(style);
 
-        egui::TopBottomPanel::bottom("status_bar")
-            .exact_height(6.0)
+        if ctx.input_mut(|i| i.consume_key(Modifiers::CTRL, egui::Key::Enter)) {
+            self.mode = match self.mode {
+                NoteMode::NoDate => NoteMode::Date,
+                NoteMode::Date => NoteMode::NoDate,
+            };
+        } else if ctx.input_mut(|i| {
+            i.modifiers == Modifiers::NONE && i.consume_key(Modifiers::NONE, egui::Key::Enter)
+        }) {
+            self.handle_note();
+            if self.error.is_none() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+        }
+
+        if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, egui::Key::Escape)) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+    }
+
+    fn on_exit(&mut self) {
+        self.save_config();
+    }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        eframe::set_value(storage, eframe::APP_KEY, self);
+        self.save_config();
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        egui::Panel::bottom("status_bar")
+            .exact_size(6.0)
             .show_separator_line(false)
             .frame(Frame {
                 inner_margin: Margin::ZERO,
@@ -174,7 +203,7 @@ impl App for DailyNote {
                 outer_margin: Margin::ZERO,
                 shadow: Shadow::NONE,
             })
-            .show(ctx, |ui| {
+            .show_inside(ui, |ui| {
                 let mode_color = match self.mode {
                     NoteMode::NoDate => Color32::from_rgb(100, 160, 255),
                     NoteMode::Date => Color32::from_rgb(255, 100, 100),
@@ -189,29 +218,7 @@ impl App for DailyNote {
                     .fill(Color32::from_rgb(18, 18, 24))
                     .inner_margin(Margin::same(12)),
             )
-            .show(ctx, |ui| {
-                // Top bar with title + icon button
-                ui.horizontal(|ui| {
-                    ui.heading(RichText::new("Daily Note").strong());
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::RIGHT), |ui| {
-                        ui.add(
-                            egui::Image::from_bytes(
-                                "bytes://info.png",
-                                include_bytes!("../info.png").as_slice(),
-                            )
-                            .fit_to_exact_size(Vec2::splat(28.0))
-                            .sense(egui::Sense::hover()),
-                        )
-                        .on_hover_text(
-                            "Shortcuts:\n\
-                            Enter – Send note & close\n\
-                            Shift+Enter – New line\n\
-                            Ctrl+Enter – Toggle date mode\n\
-                            Esc – Close without saving",
-                        );
-                    });
-                });
-
+            .show_inside(ui, |ui| {
                 ui.add_space(8.0);
 
                 let text_edit_frame = Frame::default()
@@ -226,7 +233,7 @@ impl App for DailyNote {
                         .desired_width(f32::INFINITY)
                         .desired_rows(MAX_VISIBLE_LINES)
                         .font(FontId::proportional(15.0))
-                        .frame(false)
+                        .frame(Frame::NONE)
                         .return_key(Some(KeyboardShortcut::new(
                             Modifiers::SHIFT,
                             egui::Key::Enter,
@@ -249,38 +256,32 @@ impl App for DailyNote {
                             .unwrap_or(self.note.len());
                         self.note.truncate(cutoff);
                     }
+                    let rect = output.response.rect;
+                    egui::Area::new(Id::new("info_icon"))
+                        .order(egui::Order::Foreground) // draw on top
+                        .fixed_pos(rect.right_top() + egui::vec2(-15.0, -8.0)) // tweak offset
+                        .show(ui, |ui| {
+                            ui.add(
+                                egui::Image::from_bytes(
+                                    "bytes://info.png",
+                                    include_bytes!("../info.png"),
+                                )
+                                .fit_to_exact_size(Vec2::splat(24.0)),
+                            )
+                            .on_hover_text(
+                                "Shortcuts:\n\
+                                Enter – Send note & close\n\
+                                Shift+Enter – New line\n\
+                                Ctrl+Enter – Toggle date mode\n\
+                                Esc – Close without saving",
+                            );
+                        });
                 });
                 if let Some(err) = &self.error {
                     ui.add_space(8.0);
                     ui.label(RichText::new(err).color(Color32::RED).size(13.0));
                 }
             });
-        if ctx.input_mut(|i| i.consume_key(Modifiers::CTRL, egui::Key::Enter)) {
-            self.mode = match self.mode {
-                NoteMode::NoDate => NoteMode::Date,
-                NoteMode::Date => NoteMode::NoDate,
-            };
-        } else if ctx.input_mut(|i| {
-            i.modifiers == Modifiers::NONE && i.consume_key(Modifiers::NONE, egui::Key::Enter)
-        }) {
-            self.handle_note();
-            if self.error.is_none() {
-                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-            }
-        }
-
-        if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, egui::Key::Escape)) {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-        }
-    }
-
-    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
-        self.save_config();
-    }
-
-    fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        eframe::set_value(storage, eframe::APP_KEY, self);
-        self.save_config();
     }
 }
 
@@ -294,7 +295,8 @@ fn main() {
         .with_always_on_top()
         .with_titlebar_buttons_shown(false)
         .with_minimize_button(false)
-        .with_resizable(false);
+        .with_resizable(false)
+        .with_inner_size(Vec2::new(300.0, 140.0));
 
     options.centered = true;
     options.viewport = viewport;
