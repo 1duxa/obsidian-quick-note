@@ -1,5 +1,3 @@
-use std::process::Command;
-
 use chrono::Local;
 use directories::ProjectDirs;
 use eframe::{
@@ -10,13 +8,105 @@ use eframe::{
     },
 };
 use serde::{Deserialize, Serialize};
+use std::process::Command;
 
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 enum NoteMode {
-    NoDate,
-    Date,
+    NoTime,
+    Time,
 }
+fn random_bye() -> &'static str {
+    use rand::prelude::*;
+    const BYE: &[&str] = &[
+        "bye!",
+        "see you!",
+        "ciao!",
+        "adiós!",
+        "au revoir!",
+        "tschüss!",
+        "doei!",
+        "hade!",
+        "adjö!",
+        "hej då!",
+        "na zdravljé!",
+        "dovidenia!",
+        "viszontlátásra!",
+        "laho",
+        "do widzenia!",
+        "até logo!",
+        "hasta luego!",
+        "arrivederci!",
+        "a deus!",
+        "pá!",
+        "vale!",
+        "na shledanou!",
+        "farvel!",
+        "hættir!",
+        "bæ!",
+        "góðan daginn!",
+        "salaam!",
+        "do svidaniya!",
+        "poka!",
+        "sbohem!",
+        "na zdravje!",
+        "nasvidenje!",
+        "góðan dag!",
+        "sæl!",
+        "dozidānie!",
+        "uz redzēšanos!",
+        "sudie!",
+        "labas!",
+        "atskiriames!",
+        "zài jiàn!",
+        "bái bái!",
+        "sayōnara!",
+        "jā ne!",
+        "annyeong!",
+        "jal ga!",
+        "an-nyeong-hi gase-yo!",
+        "ma’a as-salaama!",
+        "ilaa al-liqa!",
+        "khuda hafiz!",
+        "alwida!",
+        "namaste!",
+        "phir milenge!",
+        "shubh ratri!",
+        "alavida!",
+        "adiós!",
+        "selamat tinggal!",
+        "sampai jumpa!",
+        "chào!",
+        "tạm biệt!",
+        "kwa heri!",
+        "hakuna matata!",
+        "shikamoo!",
+        "kwa herini!",
+        "salam!",
+        "khosh amadid!",
+        "khodaa haafez!",
+        "khodahafez!",
+        "khodahafez!",
+        "khodahafez!",
+        "hamba kahle!",
+        "sala kahle!",
+        "e noho rā!",
+        "haere rā!",
+        "kia ora!",
+        "mā te waiata!",
+        "salaam!",
+        "salaam alaykum!",
+        "wa alaykum salaam!",
+        "agur!",
+        "adiós!",
+        "do viđenja!",
+        "doviđenja!",
+        "na zdravje!",
+        "dovizhdane!",
+    ];
 
+    let mut rng = rand::rng();
+    BYE.choose(&mut rng).copied().unwrap_or("bye!")
+}
 #[derive(Serialize, Deserialize)]
 struct AppConfig {
     mode: NoteMode,
@@ -25,7 +115,7 @@ struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            mode: NoteMode::NoDate,
+            mode: NoteMode::NoTime,
         }
     }
 }
@@ -37,12 +127,14 @@ pub struct DailyNote {
     mode: NoteMode,
     config: AppConfig,
     config_path: Option<std::path::PathBuf>,
+    closing: bool,
+    close_t: f32,
+    bye: String,
 }
 
 impl DailyNote {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let (config, config_path) = Self::load_config();
-        egui_extras::install_image_loaders(&cc.egui_ctx);
 
         let mut fonts = egui::FontDefinitions::default();
         fonts.font_data.insert(
@@ -62,11 +154,15 @@ impl DailyNote {
             mode: config.mode,
             config,
             config_path,
+            closing: false,
+            close_t: 0.,
+            bye: random_bye().to_string(),
         };
 
         if let Some(storage) = cc.storage
-            && let Some(v) = eframe::get_value(storage, eframe::APP_KEY)
+            && let Some(mut v) = eframe::get_value::<DailyNote>(storage, eframe::APP_KEY)
         {
+            v.bye = app.bye;
             v
         } else {
             app
@@ -107,13 +203,15 @@ impl DailyNote {
     }
 
     fn send_note(&mut self) -> Result<(), String> {
-        if self.note.trim().is_empty() {
+        let content = std::mem::take(&mut self.note);
+        let content = content.trim();
+
+        if content.is_empty() {
             return Ok(());
         }
 
-        let content = self.note.drain(..).collect::<String>().trim().to_string();
-
-        let final_content = if self.mode == NoteMode::Date {
+        let content = content.to_owned();
+        let final_content = if self.mode == NoteMode::Time {
             let now = Local::now();
             format!("{} {}", now.format("%H:%M"), content)
         } else {
@@ -122,8 +220,6 @@ impl DailyNote {
 
         Self::get_cmd(&final_content)
             .spawn()
-            .map_err(|e| e.to_string())?
-            .wait()
             .map_err(|e| e.to_string())?;
 
         Ok(())
@@ -131,9 +227,6 @@ impl DailyNote {
 
     fn handle_note(&mut self) {
         self.error = self.send_note().err();
-        if self.error.is_none() {
-            self.note.clear();
-        }
     }
 }
 
@@ -165,20 +258,20 @@ impl App for DailyNote {
 
         if ctx.input_mut(|i| i.consume_key(Modifiers::CTRL, egui::Key::Enter)) {
             self.mode = match self.mode {
-                NoteMode::NoDate => NoteMode::Date,
-                NoteMode::Date => NoteMode::NoDate,
+                NoteMode::NoTime => NoteMode::Time,
+                NoteMode::Time => NoteMode::NoTime,
             };
         } else if ctx.input_mut(|i| {
             i.modifiers == Modifiers::NONE && i.consume_key(Modifiers::NONE, egui::Key::Enter)
         }) {
             self.handle_note();
             if self.error.is_none() {
-                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                self.closing = true;
             }
         }
 
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, egui::Key::Escape)) {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            self.closing = true;
         }
     }
 
@@ -192,26 +285,74 @@ impl App for DailyNote {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        if self.closing {
+            self.close_t += ui.ctx().input(|i| i.stable_dt).min(0.5);
+            ui.ctx().request_repaint();
+
+            egui::Area::new(Id::new("mode_overlay"))
+                .order(egui::Order::Foreground)
+                .interactable(false)
+                .show(ui, |ui| {
+                    let t = (self.close_t / 0.40).clamp(0.0, 1.0);
+
+                    let alpha = egui::lerp(0.0..=200.0, t) as u8;
+
+                    let rect = ui.content_rect();
+
+                    ui.painter().rect_filled(
+                        rect,
+                        0.0,
+                        Color32::from_rgba_unmultiplied(20, 20, 20, alpha),
+                    );
+
+                    ui.painter().text(
+                        rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        self.bye.clone(),
+                        FontId::proportional(28.0),
+                        Color32::from_rgba_unmultiplied(255, 255, 255, alpha),
+                    );
+
+                    if self.closing && t >= 1.0 {
+                        self.closing = false;
+                        self.close_t = 0.0;
+                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                });
+
+            return;
+        }
         egui::Panel::bottom("status_bar")
-            .exact_size(6.0)
+            .exact_size(24.0)
             .show_separator_line(false)
             .frame(Frame {
                 inner_margin: Margin::ZERO,
-                fill: Color32::TRANSPARENT,
+                fill: Color32::from_rgb(18, 18, 24),
                 stroke: Stroke::NONE,
                 corner_radius: CornerRadius::ZERO,
                 outer_margin: Margin::ZERO,
                 shadow: Shadow::NONE,
             })
             .show_inside(ui, |ui| {
-                let mode_color = match self.mode {
-                    NoteMode::NoDate => Color32::from_rgb(100, 160, 255),
-                    NoteMode::Date => Color32::from_rgb(255, 100, 100),
-                };
-                let rect = ui.max_rect();
-                ui.painter().rect_filled(rect, 0.0, mode_color);
+                ui.with_layout(
+                    egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+                    |ui| {
+                        let mode_text = match self.mode {
+                            NoteMode::NoTime => {
+                                "--------------------------| mode: no time |--------------------------"
+                            }
+                            NoteMode::Time => {
+                                "--------------------------| mode: time |--------------------------"
+                            }
+                        };
+                        ui.label(
+                            RichText::new(mode_text)
+                                .size(12.0)
+                                .color(Color32::from_gray(120)),
+                        );
+                    },
+                );
             });
-
         egui::CentralPanel::default()
             .frame(
                 Frame::NONE
@@ -229,7 +370,9 @@ impl App for DailyNote {
 
                 text_edit_frame.show(ui, |ui| {
                     let edit = TextEdit::multiline(&mut self.note)
-                        .hint_text("What happened today?")
+                        .hint_text(
+                            RichText::new("What happened today?").color(Color32::from_gray(120)),
+                        )
                         .desired_width(f32::INFINITY)
                         .desired_rows(MAX_VISIBLE_LINES)
                         .font(FontId::proportional(15.0))
@@ -241,7 +384,10 @@ impl App for DailyNote {
                         .lock_focus(true);
 
                     let output = edit.show(ui);
-                    output.response.request_focus();
+
+                    if ui.memory(|m| !m.has_focus(output.response.id)) {
+                        output.response.request_focus();
+                    }
 
                     if output.galley.rows.len() > MAX_VISIBLE_LINES {
                         let max_chars: usize = output.galley.rows[..MAX_VISIBLE_LINES]
@@ -259,16 +405,31 @@ impl App for DailyNote {
                     let rect = output.response.rect;
                     egui::Area::new(Id::new("info_icon"))
                         .order(egui::Order::Foreground) // draw on top
-                        .fixed_pos(rect.right_top() + egui::vec2(-15.0, -8.0)) // tweak offset
+                        .fixed_pos(rect.right_top() + egui::vec2(-15.0, -8.0))
                         .show(ui, |ui| {
-                            ui.add(
-                                egui::Image::from_bytes(
-                                    "bytes://info.png",
-                                    include_bytes!("../info.png"),
-                                )
-                                .fit_to_exact_size(Vec2::splat(24.0)),
-                            )
-                            .on_hover_text(
+                            let (rect, response) =
+                                ui.allocate_exact_size(Vec2::splat(24.0), egui::Sense::hover());
+
+                            let t = ui.ctx().animate_bool(response.id, response.hovered());
+                            let alpha = egui::lerp(120.0..=180.0, t);
+
+                            let painter = ui.painter();
+
+                            painter.circle_filled(
+                                rect.center(),
+                                10.0,
+                                Color32::from_gray(160).linear_multiply(alpha / 255.0),
+                            );
+
+                            painter.text(
+                                rect.center(),
+                                egui::Align2::CENTER_CENTER,
+                                "i",
+                                FontId::proportional(14.0),
+                                Color32::from_white_alpha(180),
+                            );
+
+                            response.on_hover_text(
                                 "Shortcuts:\n\
                                 Enter – Send note & close\n\
                                 Shift+Enter – New line\n\
@@ -298,7 +459,6 @@ fn main() {
         .with_resizable(false)
         .with_inner_size(Vec2::new(300.0, 140.0));
 
-    options.centered = true;
     options.viewport = viewport;
     eframe::run_native(
         "Daily Note",
