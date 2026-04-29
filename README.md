@@ -10,7 +10,7 @@ Press a shortcut, type a thought, hit Enter. Your note gets appended to your Obs
 
 ## Requirements
 
-- [obsidian-quick-note](https://github.com/1duxa/obsidian-quick-note) Obsidian plugin installed and enabled
+- Obsidian CLI enabled
 - Obsidian running in the background
 
 ## Installation
