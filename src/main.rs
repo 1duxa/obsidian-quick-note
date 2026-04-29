@@ -196,11 +196,16 @@ impl DailyNote {
         }
     }
 
-    fn get_cmd(content: &str) -> Command {
-        let mut cmd = Command::new("obsidian");
-        cmd.arg("daily:append").arg(format!("content={}", content));
-        cmd
-    }
+fn get_cmd(content: &str) -> Command {
+    #[cfg(target_os = "windows")]
+    let mut cmd = Command::new(r"C:\Program Files\Obsidian\Obsidian.com");
+    #[cfg(not(target_os = "windows"))]
+    let mut cmd = Command::new("obsidian");
+    
+    cmd.arg("daily:append")
+       .arg(format!("content={}", content));
+    cmd
+}
 
     fn send_note(&mut self) -> Result<(), String> {
         let content = std::mem::take(&mut self.note);
