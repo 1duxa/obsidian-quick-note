@@ -197,8 +197,25 @@ impl DailyNote {
     }
 
     fn get_cmd(content: &str) -> Command {
-        let mut cmd = Command::new("obsidian");
-        cmd.arg("daily:append").arg(format!("content={}", content));
+        #[cfg(target_os = "windows")]
+        let mut cmd = {
+            let local = std::env::var("LOCALAPPDATA").unwrap_or_default();
+            let mut c = Command::new(format!(r"{}\Obsidian\Obsidian.exe", local));
+            c.arg("daily:append").arg(format!("content={}", content));
+            c
+        };
+        #[cfg(target_os = "macos")]
+        let mut cmd = {
+            let mut c = Command::new("/Applications/Obsidian.app/Contents/MacOS/Obsidian");
+            c.arg("daily:append").arg(format!("content={}", content));
+            c
+        };
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        let cmd = {
+            let mut c = Command::new("obsidian");
+            c.arg("daily:append").arg(format!("content={}", content));
+            c
+        };
         cmd
     }
 
@@ -235,20 +252,25 @@ const MAX_VISIBLE_LINES: usize = 4;
 impl App for DailyNote {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         let mut style = (*ctx.global_style()).clone();
-        style.visuals.window_fill = Color32::from_rgb(18, 18, 24);
-        style.visuals.panel_fill = Color32::from_rgb(18, 18, 24);
+        let bg = Color32::from_rgb(14, 14, 20);
+        style.visuals.window_fill = bg;
+        style.visuals.panel_fill = bg;
 
-        style.visuals.widgets.inactive.bg_fill = Color32::from_rgb(35, 35, 45);
-        style.visuals.widgets.hovered.bg_fill = Color32::from_rgb(45, 45, 60);
-        style.visuals.widgets.active.bg_fill = Color32::from_rgb(55, 55, 75);
-
-        style.visuals.override_text_color = Some(Color32::from_rgb(210, 210, 220));
+        style.visuals.override_text_color = Some(Color32::from_rgb(208, 208, 226));
         style.visuals.window_corner_radius = CornerRadius::same(12);
-        style.visuals.widgets.noninteractive.corner_radius = CornerRadius::same(8);
-        style.visuals.widgets.inactive.corner_radius = CornerRadius::same(8);
 
-        style.visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, Color32::from_rgb(50, 50, 62));
-        style.visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, Color32::from_rgb(80, 80, 100));
+        let cr = CornerRadius::same(8);
+        style.visuals.widgets.noninteractive.corner_radius = cr;
+        style.visuals.widgets.inactive.corner_radius = cr;
+        style.visuals.widgets.hovered.corner_radius = cr;
+        style.visuals.widgets.active.corner_radius = cr;
+
+        style.visuals.widgets.inactive.bg_fill = Color32::from_rgb(26, 26, 36);
+        style.visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, Color32::from_rgb(40, 40, 56));
+        style.visuals.widgets.hovered.bg_fill = Color32::from_rgb(36, 36, 50);
+        style.visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, Color32::from_rgb(64, 64, 90));
+        style.visuals.widgets.active.bg_fill = Color32::from_rgb(48, 48, 70);
+        style.visuals.widgets.active.bg_stroke = Stroke::new(1.0, Color32::from_rgb(76, 76, 110));
 
         style.spacing.item_spacing = Vec2::new(8.0, 6.0);
         style.spacing.button_padding = Vec2::new(8.0, 4.0);
@@ -272,6 +294,10 @@ impl App for DailyNote {
 
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, egui::Key::Escape)) {
             self.closing = true;
+        }
+
+        if self.mode == NoteMode::Time {
+            ctx.request_repaint_after(std::time::Duration::from_secs(1));
         }
     }
 
@@ -323,56 +349,84 @@ impl App for DailyNote {
             return;
         }
         egui::Panel::bottom("status_bar")
-            .exact_size(24.0)
+            .exact_size(28.0)
             .show_separator_line(false)
             .frame(Frame {
-                inner_margin: Margin::ZERO,
-                fill: Color32::from_rgb(18, 18, 24),
+                inner_margin: Margin::symmetric(12, 0),
+                fill: Color32::from_rgb(14, 14, 20),
                 stroke: Stroke::NONE,
                 corner_radius: CornerRadius::ZERO,
                 outer_margin: Margin::ZERO,
                 shadow: Shadow::NONE,
             })
             .show_inside(ui, |ui| {
-                ui.with_layout(
-                    egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
-                    |ui| {
-                        let mode_text = match self.mode {
-                            NoteMode::NoTime => {
-                                "--------------------------| mode: no time |--------------------------"
+                ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                    ui.add_space(3.0);
+                    ui.allocate_ui_with_layout(
+                        Vec2::new(112.0, 22.0),
+                        egui::Layout::left_to_right(egui::Align::Center),
+                        |ui| {
+                            for (label, target) in
+                                [("no time", NoteMode::NoTime), ("time", NoteMode::Time)]
+                            {
+                                let active = self.mode == target;
+                                let fill = if active {
+                                    Color32::from_rgb(46, 46, 86)
+                                } else {
+                                    Color32::from_rgb(20, 20, 28)
+                                };
+                                let text_color = if active {
+                                    Color32::from_rgb(178, 178, 228)
+                                } else {
+                                    Color32::from_gray(68)
+                                };
+                                let btn = egui::Button::new(
+                                    RichText::new(label).size(11.0).color(text_color),
+                                )
+                                .corner_radius(CornerRadius::same(5))
+                                .fill(fill)
+                                .stroke(Stroke::new(
+                                    1.0,
+                                    if active {
+                                        Color32::from_rgb(66, 66, 126)
+                                    } else {
+                                        Color32::from_rgb(30, 30, 42)
+                                    },
+                                ));
+                                if ui.add(btn).clicked() {
+                                    self.mode = target;
+                                }
                             }
-                            NoteMode::Time => {
-                                "--------------------------| mode: time |--------------------------"
-                            }
-                        };
-                        ui.label(
-                            RichText::new(mode_text)
-                                .size(12.0)
-                                .color(Color32::from_gray(120)),
-                        );
-                    },
-                );
+                        },
+                    );
+                });
             });
         egui::CentralPanel::default()
             .frame(
                 Frame::NONE
-                    .fill(Color32::from_rgb(18, 18, 24))
+                    .fill(Color32::from_rgb(14, 14, 20))
                     .inner_margin(Margin::same(12)),
             )
             .show_inside(ui, |ui| {
-                ui.add_space(8.0);
+                ui.add_space(6.0);
 
                 let text_edit_frame = Frame::default()
-                    .fill(Color32::from_rgb(30, 30, 38))
-                    .stroke(Stroke::new(1.0, Color32::from_rgb(60, 60, 70)))
+                    .fill(Color32::from_rgb(21, 21, 31))
+                    .stroke(Stroke::new(1.0, Color32::from_rgb(46, 46, 62)))
                     .corner_radius(CornerRadius::same(10))
                     .inner_margin(Margin::symmetric(10, 10));
 
                 text_edit_frame.show(ui, |ui| {
+                    let hint = if self.mode == NoteMode::Time {
+                        let now = Local::now();
+                        RichText::new(format!("{} What happened today?", now.format("%H:%M")))
+                            .color(Color32::from_gray(120))
+                    } else {
+                        RichText::new("What happened today?").color(Color32::from_gray(120))
+                    };
+
                     let edit = TextEdit::multiline(&mut self.note)
-                        .hint_text(
-                            RichText::new("What happened today?").color(Color32::from_gray(120)),
-                        )
+                        .hint_text(hint)
                         .desired_width(f32::INFINITY)
                         .desired_rows(MAX_VISIBLE_LINES)
                         .font(FontId::proportional(15.0))
@@ -447,7 +501,10 @@ impl App for DailyNote {
 }
 
 fn main() {
-    let mut options = eframe::NativeOptions::default();
+    let mut options = eframe::NativeOptions {
+        multisampling: 4,
+        ..Default::default()
+    };
 
     let viewport = ViewportBuilder::default()
         .with_app_id("daily-note")
